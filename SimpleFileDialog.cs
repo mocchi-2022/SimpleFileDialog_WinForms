@@ -1,5 +1,5 @@
-﻿/// Simple File Dialog version 0.6
-/// Copylight mocchi 2021
+﻿/// Simple File Dialog version 0.7
+/// Copylight mocchi 2025
 /// Distributed under the Boost Software License, Version 1.0.
 
 using System;
@@ -84,6 +84,11 @@ namespace SimpleFileDialog {
 			get;
 			set;
 		}
+
+		public Control CustomControl {
+			get;
+			set;
+		} = null;
 
 		private FileDialogMode _fileDialogMode;
 		public enum FileDialogMode {
@@ -186,6 +191,22 @@ namespace SimpleFileDialog {
 		private ChildItem[] _children;
 
 		private void SimpleFileDialog_Load(object sender, EventArgs e) {
+
+			if (CustomControl != null) {
+				SuspendLayout();
+				CustomControl.Dock = DockStyle.None;
+				CustomControl.Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
+				CustomControl.Location = new Point(listViewFileList.Left, textBoxFileName.Bottom + 4);
+				CustomControl.Width = buttonOK.Left - CustomControl.Left - 4;
+				int heightShortage = CustomControl.Height - (ClientSize.Height - textBoxFileName.Bottom - 8);
+				if (heightShortage > 0) {
+					Height += heightShortage;
+					buttonOK.Top += heightShortage;
+					buttonCancel.Top += heightShortage;
+				}
+				Controls.Add(CustomControl);
+				ResumeLayout(false);
+			}
 
 			if (!string.IsNullOrEmpty(Title)) {
 				Text = Title;

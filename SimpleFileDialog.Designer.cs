@@ -28,7 +28,7 @@
 			this.buttonRedo = new System.Windows.Forms.Button();
 			this.buttonUp = new System.Windows.Forms.Button();
 			this.listViewFileList = new System.Windows.Forms.ListView();
-			this.label1 = new System.Windows.Forms.Label();
+			this.labelFileName = new System.Windows.Forms.Label();
 			this.textBoxFileName = new System.Windows.Forms.TextBox();
 			this.comboBoxFilter = new System.Windows.Forms.ComboBox();
 			this.buttonOK = new System.Windows.Forms.Button();
@@ -97,15 +97,15 @@
 			this.listViewFileList.Click += new System.EventHandler(this.listViewFileList_Click);
 			this.listViewFileList.DoubleClick += new System.EventHandler(this.listViewFileList_DoubleClick);
 			// 
-			// label1
+			// labelFileName
 			// 
-			this.label1.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
-			this.label1.AutoSize = true;
-			this.label1.Location = new System.Drawing.Point(15, 286);
-			this.label1.Name = "label1";
-			this.label1.Size = new System.Drawing.Size(48, 12);
-			this.label1.TabIndex = 4;
-			this.label1.Text = "filename";
+			this.labelFileName.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
+			this.labelFileName.AutoSize = true;
+			this.labelFileName.Location = new System.Drawing.Point(15, 286);
+			this.labelFileName.Name = "labelFileName";
+			this.labelFileName.Size = new System.Drawing.Size(48, 12);
+			this.labelFileName.TabIndex = 4;
+			this.labelFileName.Text = "filename";
 			// 
 			// textBoxFileName
 			// 
@@ -206,7 +206,7 @@
 			this.Controls.Add(this.buttonCancel);
 			this.Controls.Add(this.buttonOK);
 			this.Controls.Add(this.comboBoxFilter);
-			this.Controls.Add(this.label1);
+			this.Controls.Add(this.labelFileName);
 			this.Controls.Add(this.listViewFileList);
 			this.Controls.Add(this.buttonUp);
 			this.Controls.Add(this.buttonRedo);
@@ -234,7 +234,7 @@
 		private System.Windows.Forms.Button buttonRedo;
 		private System.Windows.Forms.Button buttonUp;
 		private System.Windows.Forms.ListView listViewFileList;
-		private System.Windows.Forms.Label label1;
+		private System.Windows.Forms.Label labelFileName;
 		private System.Windows.Forms.TextBox textBoxFileName;
 		private System.Windows.Forms.ComboBox comboBoxFilter;
 		private System.Windows.Forms.Button buttonOK;
