@@ -1,4 +1,4 @@
-﻿/// Simple File Dialog version 0.3
+﻿/// Simple File Dialog version 0.4
 /// Copylight mocchi 2021
 /// Distributed under the Boost Software License, Version 1.0.
 
@@ -21,6 +21,7 @@ using System.IO;
 // https://nasu38yen.wordpress.com/2010/05/28/%e6%8b%a1%e5%bc%b5%e5%ad%90%e3%81%8b%e3%82%89%e5%b0%8f%e3%81%95%e3%81%aa%e3%82%a2%e3%82%a4%e3%82%b3%e3%83%b3%e3%82%92get%e3%81%99%e3%82%8b%e3%81%ab%e3%81%af%e3%80%81shgetfileinfo%e3%82%92usefileattrib/
 // https://dobon.net/vb/bbs/log3-51/30394.html
 // https://www.curict.com/item/0a/0a33f42.html
+// https://code-examples.net/ja/q/137a22b
 
 // Todo: select folder
 namespace SimpleFileDialog {
@@ -134,6 +135,7 @@ namespace SimpleFileDialog {
 
 			var detailBmp = CreateBitmapFromBase64(@"iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAUUlEQVR42mOsr69nIAUwAjW4uLhgSuzZswcuDmcDGWRpOHDSF8g5sN2YoHsaGhpQNDAyMsLl/v//D+fC2UDFIA1AfUT6GN2GUScNLScRqRoCAK43deFZIhv/AAAAAElFTkSuQmCC");
 			radioButtonDetail.Image = detailBmp;
+
 		}
 
 		private Dictionary<string, int> _extensionToImageListIndex;
@@ -287,7 +289,12 @@ namespace SimpleFileDialog {
 			_undoIndex = -1;
 			_undoRedoBuffer = new List<string>();
 
-			CurrentDirectory = InitialDirectory;
+			if (Directory.Exists(InitialDirectory)) {
+				CurrentDirectory = InitialDirectory;
+			} else {
+				CurrentDirectory = System.IO.Directory.GetCurrentDirectory();
+			}
+			textBoxFileName.Text = FileName;
 		}
 
 		private void RedrawListView() {
@@ -327,6 +334,9 @@ namespace SimpleFileDialog {
 				).ToArray();
 
 				textBoxTargetFolder.Text = CurrentDirectory;
+				textBoxTargetFolder.SelectionStart = textBoxTargetFolder.Text.Length - 1;
+				textBoxTargetFolder.SelectionLength = 0;
+
 				listViewFileList.VirtualListSize = _children.Length;
 				listViewFileList.Invalidate();
 			} finally {
