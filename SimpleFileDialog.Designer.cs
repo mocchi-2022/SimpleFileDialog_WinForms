@@ -91,6 +91,8 @@
 			this.listViewFileList.Size = new System.Drawing.Size(659, 240);
 			this.listViewFileList.TabIndex = 2;
 			this.listViewFileList.UseCompatibleStateImageBehavior = false;
+			this.listViewFileList.VirtualMode = true;
+			this.listViewFileList.RetrieveVirtualItem += new System.Windows.Forms.RetrieveVirtualItemEventHandler(this.listViewFileList_RetrieveVirtualItem);
 			this.listViewFileList.Click += new System.EventHandler(this.listViewFileList_Click);
 			this.listViewFileList.DoubleClick += new System.EventHandler(this.listViewFileList_DoubleClick);
 			// 

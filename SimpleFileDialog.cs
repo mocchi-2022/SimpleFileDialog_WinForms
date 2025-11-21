@@ -1,4 +1,4 @@
-﻿/// Simple File Dialog version 0.2
+﻿/// Simple File Dialog version 0.3
 /// Copylight mocchi 2021
 /// Distributed under the Boost Software License, Version 1.0.
 
@@ -137,6 +137,20 @@ namespace SimpleFileDialog {
 		}
 
 		private Dictionary<string, int> _extensionToImageListIndex;
+
+		private class ChildItem {
+			public bool isDir;
+			public string text, dateModified, fileSize;
+			public int imageIndex;
+			public ChildItem(bool isDir, string text, string dateModified, string fileSize, int imageIndex) {
+				this.isDir = isDir;
+				this.text = text;
+				this.dateModified = dateModified;
+				this.fileSize = fileSize;
+				this.imageIndex = imageIndex;
+			}
+		}
+		private ChildItem[] _children;
 
 		private void SimpleFileDialog_Load(object sender, EventArgs e) {
 
@@ -277,7 +291,6 @@ namespace SimpleFileDialog {
 		}
 
 		private void RedrawListView() {
-			listViewFileList.Items.Clear();
 			if (!Visible || !Directory.Exists(_currentDirectory)) {
 				return;
 			}
@@ -290,87 +303,32 @@ namespace SimpleFileDialog {
 				var items = new List<ListViewItem>();
 				// display folders and files.
 
-				var dirs = Directory.GetDirectories(_currentDirectory);
-				string[] files;
+				var childDirs = Directory.GetDirectories(_currentDirectory).Select(dir=>Path.GetFileName(dir));
+				IEnumerable<string> childFiles;
 				if (!string.IsNullOrEmpty(_customFilterString)) {
 					var filter = _customFilterString;
 					if (filter.Length == 0 || filter[filter.Length - 1] != '.') filter += '*';
-					files = Directory.GetFiles(_currentDirectory, filter);
+					childFiles = Directory.GetFiles(_currentDirectory, filter).Select(file=>Path.GetFileName(file));
 				} else {
 					var filters = comboBoxFilter.Items.Count > 0 ? ((string)comboBoxFilter.SelectedValue).Split(';') : null;
-					files = filters.SelectMany(filter => Directory.GetFiles(_currentDirectory, filter)).ToArray();
+					childFiles = filters.SelectMany(filter => Directory.GetFiles(_currentDirectory, filter)).Select(file=>Path.GetFileName(file));
 				}
-				switch (listViewFileList.View) {
-					case View.List: {
-							// directories
-							foreach (var dir in dirs) {
-								var lvi = new ListViewItem(Path.GetFileName(dir));
-								lvi.ImageIndex = 0;
-								items.Add(lvi);
-							}
 
-							// files
-							foreach (var file in files) {
-								var lvi = new ListViewItem(Path.GetFileName(file));
-
-								var ext = Path.GetExtension(file).ToLower();
-								int idx;
-								if (!_extensionToImageListIndex.TryGetValue(ext, out idx)) {
-									idx = 1;
-								}
-								lvi.ImageIndex = idx;
-								items.Add(lvi);
-							}
+				_children = 
+					childDirs.Select(dir=> new ChildItem(true, dir, "", "", 0)).Concat(
+					childFiles.Select(file=>{
+						var ext = Path.GetExtension(file).ToLower();
+						int idx;
+						if (!_extensionToImageListIndex.TryGetValue(ext, out idx)) {
+							idx = 1;
 						}
+						return new ChildItem(false, file, "", "", idx);
+					})
+				).ToArray();
 
-						break;
-					case View.Details: {
-							// directories
-							foreach (var dir in dirs) {
-								var lvi = new ListViewItem(new string[] { Path.GetFileName(dir), "", "" });
-								lvi.ImageIndex = 0;
-								items.Add(lvi);
-							}
-
-							// files
-							var unitname = new string[] { " KB", " MB", " GB", " TB" };
-							foreach (var file in files) {
-								var fi = new FileInfo(file);
-
-								var fileSize = fi.Length;
-								string fileSizeStr = "> 10 TB";
-
-								long denom = 1024L;
-								for (var i = 0; i < 4; ++i) {
-									if (fileSize < denom * 10240L) {
-										long reminder;
-										long quot = Math.DivRem(fileSize, denom, out reminder);
-										fileSizeStr = (quot + (reminder > 0L ? 1L : 0L)).ToString() + unitname[i];
-										break;
-									}
-									denom *= 1024L;
-								}
-
-								var ext = Path.GetExtension(file).ToLower();
-								int idx;
-								if (!_extensionToImageListIndex.TryGetValue(ext, out idx)) {
-									idx = 1;
-								}
-
-								var lvi = new ListViewItem(new string[] { Path.GetFileName(file), fi.LastWriteTime.ToString(), fileSizeStr });
-								lvi.ImageIndex = idx;
-								items.Add(lvi);
-							}
-						}
-						break;
-				}
 				textBoxTargetFolder.Text = CurrentDirectory;
-
-				listViewFileList.SuspendLayout();
-				foreach (var itm in items) {
-					listViewFileList.Items.Add(itm);
-				}
-				listViewFileList.ResumeLayout();
+				listViewFileList.VirtualListSize = _children.Length;
+				listViewFileList.Invalidate();
 			} finally {
 				Cursor.Current = cursor;
 			}
@@ -501,29 +459,71 @@ namespace SimpleFileDialog {
 			}
 		}
 
+		private void listViewFileList_RetrieveVirtualItem(object sender, RetrieveVirtualItemEventArgs e) {
+			if (e.ItemIndex < 0 || e.ItemIndex >= _children.Length) return;
+			if (e.Item == null) e.Item = new ListViewItem(new string[]{"", "", ""});
+			var item = _children[e.ItemIndex];
+			e.Item.Text = item.text;
+			e.Item.ImageIndex = item.imageIndex;
+			if (listViewFileList.View == View.Details){
+				if (item.isDir){
+					e.Item.SubItems[1].Text = "";
+					e.Item.SubItems[2].Text = "";
+				}else{
+					if (string.IsNullOrEmpty(item.dateModified) || string.IsNullOrEmpty(item.fileSize)) {
+						for (var j = e.ItemIndex; j < e.ItemIndex + 50 && j < _children.Length; ++j) {
+							var file = _children[j].text;
+							var unitname = new string[] { " KB", " MB", " GB", " TB" };
+							var fi = new FileInfo(Path.Combine(CurrentDirectory, file));
+
+							var fileSize = fi.Length;
+							string fileSizeStr = "> 10 TB";
+
+							long denom = 1024L;
+							for (var i = 0; i < 4; ++i) {
+								if (fileSize < denom * 10240L) {
+									long reminder;
+									long quot = Math.DivRem(fileSize, denom, out reminder);
+									fileSizeStr = (quot + (reminder > 0L ? 1L : 0L)).ToString() + unitname[i];
+									break;
+								}
+								denom *= 1024L;
+							}
+							_children[j].dateModified = fi.LastWriteTime.ToString();
+							_children[j].fileSize = fileSizeStr;
+						}
+					}
+
+					e.Item.SubItems[1].Text = item.dateModified;
+					e.Item.SubItems[2].Text = item.fileSize;
+				}
+			}
+		}
+
 		private void listViewFileList_Click(object sender, EventArgs e) {
 			if (listViewFileList.SelectedIndices.Count == 0) return;
-			var itm = listViewFileList.SelectedItems[0];
-			var fullPath = Path.Combine(CurrentDirectory, itm.Text);
+			var itmIndex = listViewFileList.SelectedIndices[0];
+			if (itmIndex < 0 || itmIndex >= _children.Length) return;
+			var fullPath = Path.Combine(CurrentDirectory, _children[itmIndex].text);
 
 			if (Directory.Exists(fullPath)) {
 				return;
 			} else {
-				textBoxFileName.Text = itm.Text;
+				textBoxFileName.Text = _children[itmIndex].text;
 			}
 		}
 
 		private void listViewFileList_DoubleClick(object sender, EventArgs e) {
 			if (listViewFileList.SelectedIndices.Count == 0) return;
-			var itm = listViewFileList.SelectedItems[0];
-			var fullPath = Path.Combine(CurrentDirectory, itm.Text);
+			var itmIndex = listViewFileList.SelectedIndices[0];
+			if (itmIndex < 0 || itmIndex >= _children.Length) return;
+			var fullPath = Path.Combine(CurrentDirectory, _children[itmIndex].text);
 
 			if (Directory.Exists(fullPath)) {
 				if (string.IsNullOrEmpty(_customFilterString)) textBoxFileName.Text = "";
 				CurrentDirectory = fullPath;
 			} else {
 				DialogResult = System.Windows.Forms.DialogResult.OK;
-//				FileName = itm.Text;
 				Close();
 			}
 		}
