@@ -1,4 +1,4 @@
-﻿/// Simple File Dialog version 0.4
+﻿/// Simple File Dialog version 0.5
 /// Copylight mocchi 2021
 /// Distributed under the Boost Software License, Version 1.0.
 
@@ -36,11 +36,36 @@ namespace SimpleFileDialog {
 			get;
 			set;
 		}
+		public string[] FileNames {
+			get;
+			private set;
+		}
 		public string Filter {
 			get;
 			set;
 		}
 		public string Title {
+			get;
+			set;
+		}
+		/// <summary>
+		/// Valid only "OpenFile" Mode
+		/// </summary>
+		public bool Multiselect {
+			get;
+			set;
+		}
+		/// <summary>
+		/// Valid only "OpenFile" Mode
+		/// </summary>
+		public bool CheckFileExists {
+			get;
+			set;
+		}
+		/// <summary>
+		/// Valid only "SaveFile" Mode
+		/// </summary>
+		public bool OverwritePrompt {
 			get;
 			set;
 		}
@@ -106,9 +131,11 @@ namespace SimpleFileDialog {
 			switch (fileDialogMode) {
 				case FileDialogMode.OpenFile:
 					buttonOK.Text = "Open";
+					CheckFileExists = true;
 					break;
 				case FileDialogMode.SaveFile:
 					buttonOK.Text = "Save";
+					OverwritePrompt = true;
 					break;
 				case FileDialogMode.SelectFolder:
 					buttonOK.Text = "Select";
@@ -160,11 +187,22 @@ namespace SimpleFileDialog {
 				Text = Title;
 			} else if (_fileDialogMode == FileDialogMode.OpenFile){
 				Text = "Open";
+				OverwritePrompt = false;
 			} else if (_fileDialogMode == FileDialogMode.SaveFile) {
 				Text = "Save as";
+				Multiselect = false;
+				CheckFileExists = false;
 			} else if (_fileDialogMode == FileDialogMode.SelectFolder) {
 				Text = "Select folder";
+				Multiselect = false;
+				CheckFileExists = false;
+				OverwritePrompt = false;
 			}
+
+			if (string.IsNullOrEmpty(FileName)){
+				FileName = "";
+			}
+			FileNames = new string[] { FileName };
 
 
 			// folder / file icon
@@ -268,6 +306,7 @@ namespace SimpleFileDialog {
 			listViewFileList.Columns.Add("File size", 100);
 			listViewFileList.Columns[2].TextAlign = HorizontalAlignment.Right;
 			listViewFileList.View = View.Details;
+			listViewFileList.MultiSelect = Multiselect;
 
 			comboBoxFilter.DataSource = null;
 			if (Filter != null) {
@@ -294,7 +333,9 @@ namespace SimpleFileDialog {
 			} else {
 				CurrentDirectory = System.IO.Directory.GetCurrentDirectory();
 			}
-			textBoxFileName.Text = FileName;
+			if (_fileDialogMode != FileDialogMode.SelectFolder) {
+				textBoxFileName.Text = FileName;
+			}
 		}
 
 		private void RedrawListView() {
@@ -345,34 +386,13 @@ namespace SimpleFileDialog {
 		}
 
 		private bool CheckValid(string path, bool withWildcard) {
-			var invalidPathChars = withWildcard ? 
-				Path.GetInvalidPathChars().Concat(new[] { '*', '?' }).ToArray() : Path.GetInvalidPathChars();
+			if (string.IsNullOrEmpty(path)) return true;
+			var origInvalPathCharsWithoutDQ = Path.GetInvalidPathChars().Where(c=> c != '"');
+			var invalidPathChars = withWildcard ?
+				origInvalPathCharsWithoutDQ.Concat(new[] { '*', '?' }).ToArray() : origInvalPathCharsWithoutDQ.ToArray();
 			if (path.IndexOfAny(invalidPathChars) >= 0
-				|| Regex.IsMatch(path, @"(^|\\|/)(CON|PRN|AUX|NUL|CLOCK\$|COM[0-9]|LPT[0-9])(\.|\\|/|$)", RegexOptions.IgnoreCase)) {
+				|| Regex.IsMatch(path, @"(^|\\|/)(CON|PRN|AUX|NUL|CLOCK\$|COM[0-9]|LPT[0-9])(\.|\\|/|$|\t)", RegexOptions.IgnoreCase)) {
 				return false;
-			}
-			return true;
-		}
-
-		private bool Confirm() {
-			var target = textBoxFileName.Text;
-			if (_fileDialogMode != FileDialogMode.SelectFolder && string.IsNullOrEmpty(target)) return false;
-
-			if (!CheckValid(target, true)) {
-				MessageBox.Show(this, "invalid name", "error", MessageBoxButtons.OK);
-				return false;
-			}
-
-			var fullPath = Path.Combine(_currentDirectory, target);
-
-			bool exists = File.Exists(fullPath);
-
-			if (_fileDialogMode == FileDialogMode.OpenFile && !exists) {
-				MessageBox.Show(this, target + " not found.", "file not found", MessageBoxButtons.OK);
-				return false;
-			} else if (_fileDialogMode == FileDialogMode.SaveFile && exists) {
-				var rc = MessageBox.Show(this, target + " exists. override?", "confirm to override", MessageBoxButtons.YesNo);
-				if (rc == System.Windows.Forms.DialogResult.No) return false;
 			}
 			return true;
 		}
@@ -409,19 +429,104 @@ namespace SimpleFileDialog {
 			Close();
 		}
 
-		private void SimpleFileDialog_FormClosing(object sender, FormClosingEventArgs e)
-		{
-			if (DialogResult == System.Windows.Forms.DialogResult.OK){
-				if (!Confirm()) {
-					e.Cancel = true;
-					FileName = "";
-				} else {
-					var fileName = Path.Combine(CurrentDirectory, textBoxFileName.Text);
-					if (!Path.HasExtension(fileName) && !string.IsNullOrEmpty(DefaultExt)){
-						fileName += "." + DefaultExt;
+		// abc.txt  => string[]{"abc.txt"}
+		// "abc.txt" "def.txt" "efg.txt"    => string[]{"abc.txt", "def.txt", "efg.txt"}
+		// abc.txt "def.txt" "efg.txt"      => null   (error)
+		// "abc.txt" def.txt "efg.txt"      => string[]{"abc.txt", "def.txt", "efg.txt"}
+		// "abc.txt" " "def.txt" "efg.txt"  => string[]{"abc.txt", " ", "def.txt", "efg.txt"}
+		// "*.txt" " "def.txt" "efg.txt"    => null   (error)
+		// ".txt" " "def.txt" "efg.txt"     => null   (error)
+		// "" => string[]{""}
+		private string[] ParseFileNames(string text){
+			var fileNames = new List<string>();
+			var idxFirstQuote = text.IndexOf('"');
+			if (idxFirstQuote >= 0) {
+				if (text.Substring(0, idxFirstQuote).Trim() != "") return null;
+				int idxOpenQuote = -1;
+				for (var i = 0; i < text.Length; ++i){
+					char c = text[i];
+					if (c == '"'){
+						if (idxOpenQuote == -1){
+							idxOpenQuote = i;
+						}else{
+							var fileNameToAdd = text.Substring(idxOpenQuote + 1, i - idxOpenQuote - 1);
+							if (!CheckValid(fileNameToAdd, true)) return null;
+							fileNames.Add(fileNameToAdd);
+							idxOpenQuote = -1;
+						}
+					} else if (idxOpenQuote == -1 && c != ' ') {
+						idxOpenQuote = i - 1;
 					}
-					FileName = fileName;
 				}
+				if (idxOpenQuote >= 0) fileNames.Add(text.Substring(idxOpenQuote + 1).TrimEnd());
+				return fileNames.ToArray();
+			}else{
+				return new string[]{text.Trim()};
+			}
+		}
+
+		private void SimpleFileDialog_FormClosing(object sender, FormClosingEventArgs e) {
+			if (DialogResult == System.Windows.Forms.DialogResult.OK){
+				e.Cancel = true;
+				if (_fileDialogMode == FileDialogMode.SelectFolder){
+					FileName = CurrentDirectory;
+					FileNames = new string[1]{FileName};
+					e.Cancel = false;
+					return;
+				}
+				var target = textBoxFileName.Text;
+				if (string.IsNullOrEmpty(target)) return;
+
+				var rawFileNames = ParseFileNames(target);
+				if (rawFileNames == null) {
+					MessageBox.Show(this, "invalid name", "error", MessageBoxButtons.OK);
+					return;
+				}
+
+				int cnt = Multiselect ? rawFileNames.Length : 1;
+
+				if (cnt == 1) {
+					var fullPath = Path.IsPathRooted(rawFileNames[0]) ? rawFileNames[0] : Path.Combine(_currentDirectory, rawFileNames[0]);
+					var fileName = Path.GetFileName(rawFileNames[0]);
+					if (Directory.Exists(fullPath)) {
+						// change directory
+						CurrentDirectory = fullPath;
+						textBoxFileName.Text = "";
+						return;
+					} else if (fileName.IndexOfAny(new char[] { '?', '*' }) >= 0) {
+						// custom filter
+						textBoxFileName.Text = fileName;
+						textBoxFileName.SelectAll();
+						_customFilterString = fileName;
+						RedrawListView();
+						return;
+					} else if (OverwritePrompt && File.Exists(fullPath)) {
+						// overwrite prompt for SaveFile mode
+						var rc = MessageBox.Show(this, fileName + " exists. override?", "confirm to override", MessageBoxButtons.YesNo);
+						if (rc == System.Windows.Forms.DialogResult.No) return;
+					}
+				}
+
+//				FileName = "";
+//				FileNames = new string[1] { "" };
+				
+				var fileNamesToWrite = new string[cnt];
+				for (var i = 0; i < cnt; ++i){
+					var fullPath = Path.IsPathRooted(rawFileNames[i]) ? rawFileNames[i] : Path.Combine(_currentDirectory, rawFileNames[i]);
+					var fileName = Path.GetFileName(fullPath);
+
+					if (CheckFileExists && !File.Exists(fullPath)) {
+						MessageBox.Show(this, fullPath + " not found.", "file not found", MessageBoxButtons.OK);
+						return;
+					}
+					if (!Path.HasExtension(fullPath) && !string.IsNullOrEmpty(DefaultExt)) {
+						fullPath += "." + DefaultExt;
+					}
+					fileNamesToWrite[i] = fullPath;
+				}
+				FileName = fileNamesToWrite[0];
+				FileNames = fileNamesToWrite;
+				e.Cancel = false;
 			}
 		}
 
@@ -446,25 +551,8 @@ namespace SimpleFileDialog {
 
 		private void textBoxFileName_KeyPress(object sender, KeyPressEventArgs e) {
 			if (e.KeyChar == (char)Keys.Enter) {
-				var fileName = textBoxFileName.Text;
-				var newDir = "";
-				if (Directory.Exists(fileName)) {
-					CurrentDirectory = fileName;
-					textBoxFileName.Text = "";
-				} else if (CheckValid(fileName, false)) {
-					if (fileName.IndexOfAny(new char[] {'?', '*'}) >= 0){
-						textBoxFileName.Text = fileName;
-						textBoxFileName.SelectAll();
-						_customFilterString = fileName;
-						RedrawListView();
-					} else if (Directory.Exists(newDir = Path.Combine(CurrentDirectory, fileName))) {
-						CurrentDirectory = newDir;
-						textBoxFileName.Text = "";
-					} else {
-						DialogResult = System.Windows.Forms.DialogResult.OK;
-						Close();
-					}
-				}
+				DialogResult = System.Windows.Forms.DialogResult.OK;
+				Close();
 				e.Handled = true;
 			}
 		}
@@ -512,14 +600,23 @@ namespace SimpleFileDialog {
 
 		private void listViewFileList_Click(object sender, EventArgs e) {
 			if (listViewFileList.SelectedIndices.Count == 0) return;
-			var itmIndex = listViewFileList.SelectedIndices[0];
-			if (itmIndex < 0 || itmIndex >= _children.Length) return;
-			var fullPath = Path.Combine(CurrentDirectory, _children[itmIndex].text);
+			var fileList = "";
+			int listCount = 0;
+			for (var i = 0; i < listViewFileList.SelectedIndices.Count; ++i){
+				var itmIndex = listViewFileList.SelectedIndices[i];
+				if (itmIndex < 0 || itmIndex >= _children.Length) continue;
+				var fullPath = Path.Combine(CurrentDirectory, _children[itmIndex].text);
 
-			if (Directory.Exists(fullPath)) {
-				return;
-			} else {
-				textBoxFileName.Text = _children[itmIndex].text;
+				if (Directory.Exists(fullPath)) {
+					continue;
+				} else {
+					if (!string.IsNullOrEmpty(fileList)) fileList += ' ';
+					fileList += '"' + _children[itmIndex].text + '"';
+					++listCount;
+				}
+			}
+			if (!string.IsNullOrEmpty(fileList)){
+				textBoxFileName.Text = (listCount == 1) ? fileList.Substring(1, fileList.Length - 2) : fileList;
 			}
 		}
 
