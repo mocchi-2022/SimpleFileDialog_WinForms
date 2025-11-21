@@ -1,4 +1,4 @@
-﻿/// Simple File Dialog version 0.5
+﻿/// Simple File Dialog version 0.6
 /// Copylight mocchi 2021
 /// Distributed under the Boost Software License, Version 1.0.
 
@@ -80,6 +80,10 @@ namespace SimpleFileDialog {
 				}
 			}
 		}
+		public int FilterIndex {
+			get;
+			set;
+		}
 
 		private FileDialogMode _fileDialogMode;
 		public enum FileDialogMode {
@@ -88,10 +92,10 @@ namespace SimpleFileDialog {
 
 		private string _currentDirectory = "";
 		public string CurrentDirectory {
-			get{
+			get {
 				return _currentDirectory;
 			}
-			set{
+			set {
 				if (!Directory.Exists(value)) {
 					throw new DirectoryNotFoundException();
 				}
@@ -316,9 +320,12 @@ namespace SimpleFileDialog {
 					filters.Add(new { Display = filtersStr[i], Value = filtersStr[i + 1] });
 				}
 				if (filters.Count > 0) {
-					comboBoxFilter.DataSource = filters.ToArray();
 					comboBoxFilter.DisplayMember = "Display";
 					comboBoxFilter.ValueMember = "Value";
+					comboBoxFilter.DataSource = filters.ToArray();
+					var filterIndex = FilterIndex - 1;
+					if (filterIndex < 0) filterIndex = 0;
+					if (filterIndex < filters.Count) comboBoxFilter.SelectedIndex = filterIndex;
 				}
 			}
 
@@ -358,7 +365,7 @@ namespace SimpleFileDialog {
 					if (filter.Length == 0 || filter[filter.Length - 1] != '.') filter += '*';
 					childFiles = Directory.GetFiles(_currentDirectory, filter).Select(file=>Path.GetFileName(file));
 				} else {
-					var filters = comboBoxFilter.Items.Count > 0 ? ((string)comboBoxFilter.SelectedValue).Split(';') : null;
+					var filters = comboBoxFilter.Items.Count > 0 ? ((string)comboBoxFilter.SelectedValue).Split(';') : new string[]{};
 					childFiles = filters.SelectMany(filter => Directory.GetFiles(_currentDirectory, filter)).Select(file=>Path.GetFileName(file));
 				}
 
@@ -528,6 +535,7 @@ namespace SimpleFileDialog {
 				FileNames = fileNamesToWrite;
 				e.Cancel = false;
 			}
+			FilterIndex = comboBoxFilter.SelectedIndex + 1;
 		}
 
 		private void buttonUp_Click(object sender, EventArgs e) {
@@ -656,6 +664,17 @@ namespace SimpleFileDialog {
 			buttonUndo.Enabled = true;
 			_currentDirectory = _undoRedoBuffer[_undoIndex];
 			RedrawListView();
+		}
+
+		private void textBoxTargetFolder_Enter(object sender, EventArgs e) {
+			var tm = new Timer();
+			tm.Interval = 1;
+			tm.Tick += (s_, e_) => {
+				textBoxTargetFolder.SelectAll();
+				tm.Stop();
+				tm.Dispose();
+			};
+			tm.Start();
 		}
 
 	}

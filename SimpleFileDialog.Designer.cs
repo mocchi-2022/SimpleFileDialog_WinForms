@@ -48,6 +48,7 @@
 			this.textBoxTargetFolder.Name = "textBoxTargetFolder";
 			this.textBoxTargetFolder.Size = new System.Drawing.Size(461, 19);
 			this.textBoxTargetFolder.TabIndex = 0;
+			this.textBoxTargetFolder.Enter += new System.EventHandler(this.textBoxTargetFolder_Enter);
 			this.textBoxTargetFolder.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.textBoxTargetFolder_KeyPress);
 			// 
 			// buttonUndo
